@@ -1,4 +1,4 @@
-"""A fixed-order animal guessing game using the UCI Zoo dataset."""
+"""An animal guessing game using the UCI Zoo dataset."""
 
 import csv
 from pathlib import Path
@@ -37,6 +37,8 @@ QUESTIONS = (
     ("legs", 8, "Does it have eight legs?"),
 )
 MAX_QUESTIONS = 12
+ANSWER_ACCURACY = 0.9
+STOP_PROBABILITY = 0.8
 
 
 def load_animals(filepath=DATA_FILE):
@@ -56,7 +58,7 @@ def load_animals(filepath=DATA_FILE):
 
 
 def next_question(animals, asked):
-    """Take the next fixed-order question that can split the candidates."""
+    """Take the next fixed-order question that can split the dataset."""
     for index, (feature, expected, wording) in enumerate(QUESTIONS):
         if index in asked:
             continue
@@ -66,21 +68,36 @@ def next_question(animals, asked):
     return None
 
 
-def matching_animals(animals, feature, expected, answer):
-    """Keep records whose stored trait agrees with a yes or no answer."""
-    return [
-        animal for animal in animals
-        if (animal[feature] == expected) == answer
-    ]
+def update_probabilities(animals, probabilities, feature, expected, answer):
+    """Give matching records more weight, then make the weights sum to one."""
+    updated = []
+    for animal, probability in zip(animals, probabilities):
+        matches = (animal[feature] == expected) == answer
+        likelihood = ANSWER_ACCURACY if matches else 1 - ANSWER_ACCURACY
+        updated.append(probability * likelihood)
+    total = sum(updated)
+    return [probability / total for probability in updated]
+
+
+def name_probabilities(animals, probabilities):
+    """Combine records that have the same animal name, such as the two frogs."""
+    totals = {}
+    for animal, probability in zip(animals, probabilities):
+        name = animal["animal_name"]
+        totals[name] = totals.get(name, 0) + probability
+    return totals
 
 
 def play():
     animals = load_animals()
+    probabilities = [1 / len(animals)] * len(animals)
     asked = set()
-    names = set(animal["animal_name"] for animal in animals)
     print("Think of an animal in the UCI Zoo dataset. Answer yes or no.")
 
-    while len(names) > 1 and len(asked) < MAX_QUESTIONS:
+    while len(asked) < MAX_QUESTIONS:
+        scores = name_probabilities(animals, probabilities)
+        if max(scores.values()) >= STOP_PROBABILITY:
+            break
         question = next_question(animals, asked)
         if question is None:
             break
@@ -88,18 +105,24 @@ def play():
         answer = input(f"Question {len(asked) + 1}: {wording} [y/n] ").strip().lower()
         while answer not in ("y", "yes", "n", "no"):
             answer = input("Please answer y or n: ").strip().lower()
-        animals = matching_animals(animals, feature, expected, answer in ("y", "yes"))
+        probabilities = update_probabilities(
+            animals, probabilities, feature, expected, answer in ("y", "yes")
+        )
         asked.add(index)
-        names = set(animal["animal_name"] for animal in animals)
-        print(f"Possible animals: {len(names)}")
+        scores = name_probabilities(animals, probabilities)
+        best_name = max(scores, key=scores.get)
+        print(f"Current best guess: {best_name} ({scores[best_name]:.1%})")
 
-    if len(names) == 1:
-        print(f"My guess: {next(iter(names))}")
-    elif names:
-        print("I cannot identify one animal from these answers.")
-        print("Possible animals: " + ", ".join(sorted(names)))
+    scores = name_probabilities(animals, probabilities)
+    best_name = max(scores, key=scores.get)
+    if scores[best_name] >= STOP_PROBABILITY:
+        print(f"My guess: {best_name} ({scores[best_name]:.1%})")
     else:
-        print("No animal in this dataset matches all of those answers.")
+        print(f"Best guess: {best_name} ({scores[best_name]:.1%})")
+        top_three = sorted(scores, key=scores.get, reverse=True)[:3]
+        print("Top three candidates: " + ", ".join(
+            f"{name} ({scores[name]:.1%})" for name in top_three
+        ))
 
 
 if __name__ == "__main__":

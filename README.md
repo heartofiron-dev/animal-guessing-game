@@ -1,6 +1,8 @@
 # Animal Guessing Game
 
-This is a fixed-order baseline for the COMP 3106 project. It reads the UCI Zoo dataset, asks yes/no questions, and removes animal records that disagree with each answer. It stops after 12 questions, when one animal name remains, or when no remaining question can split the candidates.
+This is a fixed-order baseline for the COMP 3106 project. It reads the UCI Zoo dataset and asks yes/no questions. Each animal record starts with equal probability. After an answer, records that match it get a 0.9 likelihood; other records get a 0.1 likelihood. The game normalizes the probabilities after each question.
+
+It stops after 12 questions, when one animal name reaches 80% probability, or when no unused question can split the dataset. The two `frog` records have separate probabilities, which are added together when the game guesses a name.
 
 Run it with Python 3 from this folder:
 
@@ -8,7 +10,7 @@ Run it with Python 3 from this folder:
 python game.py
 ```
 
-Choose an animal listed in the dataset and answer each question with `y` or `n`. If several animals still fit, the game shows their names. This version uses exact matching; probability updates and other question-selection methods are planned for later stages of the project.
+Choose an animal listed in the dataset and answer each question with `y` or `n`. If no name reaches 80%, the game shows its best guess and the top three names. This version still asks questions in a fixed order. Other question-selection methods are planned for later stages of the project.
 
 ## Dataset
 
