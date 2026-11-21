@@ -1,6 +1,8 @@
 """An animal guessing game using the UCI Zoo dataset."""
 
+import argparse
 import csv
+import random
 from pathlib import Path
 
 
@@ -11,8 +13,7 @@ FIELD_NAMES = (
     "venomous", "fins", "legs", "tail", "domestic", "catsize", "type",
 )
 
-# The order is fixed. A question is skipped if every remaining record
-# would give the same answer to it.
+# Fixed mode follows this order. Random mode picks from this same list.
 QUESTIONS = (
     ("milk", 1, "Does it produce milk?"),
     ("feathers", 1, "Does it have feathers?"),
@@ -57,15 +58,20 @@ def load_animals(filepath=DATA_FILE):
     return animals
 
 
-def next_question(animals, asked):
-    """Take the next fixed-order question that can split the dataset."""
+def next_question(animals, asked, method="fixed", rng=None):
+    """Choose an unused question that can split the dataset."""
+    available = []
     for index, (feature, expected, wording) in enumerate(QUESTIONS):
         if index in asked:
             continue
         answers = {animal[feature] == expected for animal in animals}
         if len(answers) == 2:
-            return index, feature, expected, wording
-    return None
+            available.append((index, feature, expected, wording))
+    if not available:
+        return None
+    if method == "random":
+        return (rng or random).choice(available)
+    return available[0]
 
 
 def update_probabilities(animals, probabilities, feature, expected, answer):
@@ -88,17 +94,18 @@ def name_probabilities(animals, probabilities):
     return totals
 
 
-def play():
+def play(method="fixed", seed=None):
     animals = load_animals()
     probabilities = [1 / len(animals)] * len(animals)
     asked = set()
+    rng = random.Random(seed)
     print("Think of an animal in the UCI Zoo dataset. Answer yes or no.")
 
     while len(asked) < MAX_QUESTIONS:
         scores = name_probabilities(animals, probabilities)
         if max(scores.values()) >= STOP_PROBABILITY:
             break
-        question = next_question(animals, asked)
+        question = next_question(animals, asked, method, rng)
         if question is None:
             break
         index, feature, expected, wording = question
@@ -126,4 +133,8 @@ def play():
 
 
 if __name__ == "__main__":
-    play()
+    parser = argparse.ArgumentParser(description="Guess an animal from the UCI Zoo dataset.")
+    parser.add_argument("--method", choices=("fixed", "random"), default="fixed")
+    parser.add_argument("--seed", type=int, help="Repeat the same random question order.")
+    options = parser.parse_args()
+    play(options.method, options.seed)
